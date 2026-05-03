@@ -114,6 +114,6 @@ Both models were trained on Kaggle free GPU (NVIDIA T4) using notebooks in `note
 
 MIT
 
-##Author
+## Author
 
 Álvaro Peñuelas
