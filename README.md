@@ -87,14 +87,6 @@ Both models were trained on Kaggle free GPU (NVIDIA T4) using notebooks in `note
 - Detector trained on a freshwater fish dataset — generalises partially to marine species
 - Best results on clear underwater footage with a single fish centred in frame
 
-## Author
-
-Alvaro Peñuelas Suria — MSc Marine and Lacustrine Science and Management (Ghent/VUB/Antwerp), BSc Biology (Universidad de Navarra). GitHub: [alvaropenuelas](https://github.com/alvaropenuelas)
-
-This project was developed independently as part of a portfolio demonstrating real-time computer vision applied to marine biology. AI tools (Claude Code) were used as a coding assistant; all architectural decisions, dataset curation, evaluation, and project direction are my own.
-
-## Citations and data sources
-
 ### Datasets
 
 - **Fish4Knowledge (F4K)** — Underwater video dataset for fish detection and recognition. Used for 23 species classes in the classifier.
@@ -121,3 +113,7 @@ This project was developed independently as part of a portfolio demonstrating re
 ## License
 
 MIT
+
+##Author
+
+Álvaro Peñuelas
