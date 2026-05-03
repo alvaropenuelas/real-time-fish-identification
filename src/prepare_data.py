@@ -10,8 +10,12 @@ Usage:
 """
 
 import os
+import random
 import shutil
 from pathlib import Path
+
+F4K_CAP = 150
+RANDOM_SEED = 42
 
 F4K_DIR = Path("data/fish4knowledge/fish_image")
 MED_DIR = Path("data/mediterranean")
@@ -25,14 +29,22 @@ def main():
 
     linked = 0
 
-    # Fish4Knowledge
+    # Fish4Knowledge — capped at F4K_CAP images per class
     if F4K_DIR.exists():
+        random.seed(RANDOM_SEED)
         for folder in sorted(F4K_DIR.iterdir()):
             if folder.is_dir():
+                images = list(folder.glob("*.png")) + list(folder.glob("*.jpg"))
+                capped = len(images) > F4K_CAP
+                if capped:
+                    images = random.sample(images, F4K_CAP)
                 target = OUT_DIR / folder.name
-                os.symlink(folder.resolve(), target)
-                n = len(list(folder.glob("*.png"))) + len(list(folder.glob("*.jpg")))
-                print(f"  F4K  {folder.name}: {n} images")
+                target.mkdir()
+                for img in images:
+                    os.symlink(img.resolve(), target / img.name)
+                n = len(images)
+                suffix = " (capped)" if capped else ""
+                print(f"F4K {folder.name}: {n} images copied{suffix}")
                 linked += 1
     else:
         print(f"WARNING: {F4K_DIR} not found — skipping Fish4Knowledge")

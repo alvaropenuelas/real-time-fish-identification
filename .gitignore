@@ -1,10 +1,28 @@
+# Model weights — too large for git
+weights/*.pt
+*.pt
+
+# Datasets — track via README, not git
 data/
-outputs/
+fish-detection/
+*.zip
+
+# Python
 __pycache__/
 *.pyc
-*.pt
-*.pth
-.env
-venv/
-.venv/
+*.pyo
+.ipynb_checkpoints/
+
+# OS
 .DS_Store
+
+# Outputs from training
+outputs/best_model.pt
+runs/
+yolo_outputs/
+
+# Editor
+.vscode/
+.idea/
+mediterranean-fish.mp4
+*.mp4
