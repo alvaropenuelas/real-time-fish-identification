@@ -1,0 +1,24 @@
+{
+  "phase0_baseline": {
+    "classifier_eval": {
+      "n_val": 783,
+      "num_classes": 33,
+      "top1_accuracy": 0.94,
+      "macro_f1": 0.947,
+      "confusion_matrix_png": "outputs/confusion_matrix.png"
+    },
+    "fps_cpu_non_representative": {
+      "note": "CPU, non-representative \u2014 local Mac has no CUDA; FPS not indicative of GPU target. Accuracy (see classifier_eval) is valid; latency is not.",
+      "device": "cpu",
+      "frames_total": 120,
+      "frames_measured": 119,
+      "warmup_detect_ms": 258.91,
+      "warmup_classify_ms": 124.21,
+      "end_to_end_fps": 3.78,
+      "detect_ms_per_frame": 162.97,
+      "classify_ms_per_frame": 98.64,
+      "mean_crops_per_frame": 1.008,
+      "mean_classify_ms_per_crop": 97.82
+    }
+  }
+}
