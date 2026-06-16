@@ -7,4 +7,5 @@ Pillow>=10.0.0
 requests>=2.31.0
 matplotlib>=3.8.0
 scikit-learn>=1.4.0
+albumentations>=1.4.0  # training-time augmentation (classifier + detector)
 numpy==1.26.4
