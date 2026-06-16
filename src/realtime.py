@@ -121,6 +121,10 @@ def main():
                         help="Profile detect/classify stages over the source (no GUI); writes outputs/metrics.json")
     parser.add_argument("--max-frames", type=int, default=0,
                         help="Profile mode: cap measured frames (0 = whole video)")
+    parser.add_argument("--reclassify-interval", type=int, default=15,
+                        help="Re-run the classifier on a tracked crop every N frames (else reuse cache)")
+    parser.add_argument("--ema-beta", type=float, default=0.6,
+                        help="EMA weight on the previous cached softmax (higher = smoother, slower to switch)")
     args = parser.parse_args()
 
     source = _parse_source(args.source)
@@ -151,37 +155,75 @@ def main():
     frame_count = 0
     t0 = time.time()
 
+    # Per-track state: track_id -> {"ema": softmax vector, "last_frame": frame last classified}.
+    # A crop is classified only when its track is new or every --reclassify-interval frames;
+    # otherwise we reuse the EMA-smoothed cached vector. This cuts classifier calls and the
+    # EMA suppresses label flicker frame-to-frame.
+    N = max(1, args.reclassify_interval)
+    beta = args.ema_beta
+    cache = {}
+
     try:
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
 
-            results = detector(frame, conf=DETECT_CONF, verbose=False)
+            results = detector.track(frame, persist=True, tracker="bytetrack.yaml",
+                                     conf=DETECT_CONF, verbose=False)
             boxes = results[0].boxes
+            out = frame if len(boxes) == 0 else frame.copy()
 
-            if len(boxes) == 0:
-                out = frame
-            else:
-                out = frame.copy()
-                for box in boxes:
-                    x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
-                    x1, y1 = max(0, x1), max(0, y1)
-                    x2, y2 = min(frame_w, x2), min(frame_h, y2)
+            # Collect valid boxes with their track ids and crops.
+            items = []
+            for box in boxes:
+                x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+                x1, y1 = max(0, x1), max(0, y1)
+                x2, y2 = min(frame_w, x2), min(frame_h, y2)
+                if (x2 - x1) < MIN_CROP_PX or (y2 - y1) < MIN_CROP_PX:
+                    continue
+                tid = int(box.id[0]) if box.id is not None else None
+                items.append({"bbox": (x1, y1, x2, y2), "tid": tid,
+                              "crop": frame[y1:y2, x1:x2], "probs": None})
 
-                    if (x2 - x1) < MIN_CROP_PX or (y2 - y1) < MIN_CROP_PX:
-                        continue
+            # Lazy: classify only new/stale tracks (and untracked boxes), batched in one pass.
+            need = [
+                i for i, it in enumerate(items)
+                if it["tid"] is None or it["tid"] not in cache
+                or frame_count - cache[it["tid"]]["last_frame"] >= N
+            ]
+            if need:
+                batch_probs = classifier.predict_probs_batch([items[i]["crop"] for i in need])
+                for i, probs in zip(need, batch_probs):
+                    tid = items[i]["tid"]
+                    if tid is None:
+                        items[i]["probs"] = probs  # transient, not cached
+                    elif tid in cache:
+                        cache[tid]["ema"] = beta * cache[tid]["ema"] + (1.0 - beta) * probs
+                        cache[tid]["last_frame"] = frame_count
+                    else:
+                        cache[tid] = {"ema": probs.copy(), "last_frame": frame_count}
 
-                    crop = frame[y1:y2, x1:x2]
-                    result = classifier.predict(crop)
-                    if result:
-                        best = result["top3"][0]
-                        alts = [(p["label"], p["confidence"]) for p in result["top3"][1:]]
-                        out = annotator.draw(
-                            out, best["label"], best["confidence"],
-                            bbox=(x1, y1, x2, y2),
-                            alt_predictions=alts or None,
-                        )
+            # Draw every box from its cached (EMA) vector, or transient probs if untracked.
+            for it in items:
+                probs = it["probs"] if it["tid"] is None else cache[it["tid"]]["ema"]
+                if probs is None:
+                    continue
+                result = classifier.decode(probs)
+                if result:
+                    best = result["top3"][0]
+                    alts = [(p["label"], p["confidence"]) for p in result["top3"][1:]]
+                    out = annotator.draw(
+                        out, best["label"], best["confidence"],
+                        bbox=it["bbox"],
+                        alt_predictions=alts or None,
+                    )
+
+            # Drop tracks that have not been reclassified recently (left the frame).
+            if frame_count % 300 == 0 and cache:
+                stale = [tid for tid, v in cache.items() if frame_count - v["last_frame"] > 300]
+                for tid in stale:
+                    del cache[tid]
 
             cv2.imshow("Fish Species — Real-Time ID", out)
 

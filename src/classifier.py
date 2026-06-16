@@ -49,19 +49,31 @@ class FishClassifier:
                 f"classes.json not found in {weights_dir} or outputs/"
             )
 
-    def predict(self, frame: np.ndarray) -> dict | None:
-        # Input: BGR frame (H×W×3, uint8) from OpenCV
+    def _preprocess(self, frame: np.ndarray) -> torch.Tensor:
+        # Input: BGR frame (H×W×3, uint8) from OpenCV → normalized CHW tensor
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         img = Image.fromarray(rgb)
-        tensor = _TRANSFORMS(img).unsqueeze(0).to(self.device)
+        return _TRANSFORMS(img)
+
+    def predict_probs_batch(self, frames: list[np.ndarray]) -> np.ndarray:
+        """Softmax probabilities [N, NUM_CLASSES] for N BGR crops in ONE forward pass."""
+        if not frames:
+            return np.empty((0, NUM_CLASSES), dtype=np.float32)
+        batch = torch.stack([self._preprocess(f) for f in frames]).to(self.device)
         with torch.no_grad():
-            probs = torch.softmax(self.model(tensor), dim=1)[0]
-        top_confs, top_idxs = probs.topk(3)
+            probs = torch.softmax(self.model(batch), dim=1)
+        return probs.cpu().numpy()
+
+    def decode(self, probs: np.ndarray) -> dict | None:
+        """Turn a softmax vector into the same top3 dict predict() returns.
+        Applies the confidence threshold and the hard floor identically."""
+        top_idxs = probs.argsort()[::-1][:3]
         top3 = []
-        for conf, idx in zip(top_confs.tolist(), top_idxs.tolist()):
+        for idx in top_idxs:
+            conf = float(probs[idx])
             if conf < self.threshold:
                 break
-            # Hard floor: never display predictions below 60% confidence
+            # Hard floor: never display low-confidence predictions
             if conf < HARD_CONF_FLOOR:
                 break
             folder_name = self.class_names[idx]
@@ -70,3 +82,7 @@ class FishClassifier:
         if not top3:
             return None
         return {"top3": top3}
+
+    def predict(self, frame: np.ndarray) -> dict | None:
+        # Single-crop convenience wrapper over the batch path.
+        return self.decode(self.predict_probs_batch([frame])[0])
