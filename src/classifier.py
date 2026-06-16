@@ -17,12 +17,14 @@ from src.species_map import DISPLAY_NAMES
 # after retraining, with no edit here.
 HARD_CONF_FLOOR = 0.3
 
-_TRANSFORMS = transforms.Compose([
-    transforms.Resize(256),
-    transforms.CenterCrop(224),
-    transforms.ToTensor(),
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-])
+_TRANSFORMS = transforms.Compose(
+    [
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+    ]
+)
 
 
 class FishClassifier:
@@ -37,7 +39,7 @@ class FishClassifier:
         self.model = build_model(num_classes=self.num_classes)
         self.model.load_state_dict(state_dict)
         self.model.to(self.device)
-        getattr(self.model, "eval")()  # nn.Module.eval(), not Python built-in
+        self.model.eval()  # nn.Module.eval(), not Python built-in
 
         # ASSUMPTION: classes.json lives next to weights_path or at outputs/classes.json
         project_root = Path(__file__).parent.parent
@@ -48,9 +50,7 @@ class FishClassifier:
                     self.class_names = json.load(f)
                 break
         else:
-            raise FileNotFoundError(
-                f"classes.json not found in {weights_dir} or outputs/"
-            )
+            raise FileNotFoundError(f"classes.json not found in {weights_dir} or outputs/")
 
         # Fail loud if the label list and the checkpoint disagree on the class count.
         if len(self.class_names) != self.num_classes:

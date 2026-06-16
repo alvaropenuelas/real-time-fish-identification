@@ -22,8 +22,9 @@ def _parse_source(raw: str):
     return raw
 
 
-def run_profile(detector, classifier, cap, frame_w, frame_h, max_frames=0,
-                metrics_path="outputs/metrics.json"):
+def run_profile(
+    detector, classifier, cap, frame_w, frame_h, max_frames=0, metrics_path="outputs/metrics.json"
+):
     """Instrument the existing detect->classify pipeline. No GUI, no draw,
     inference logic identical to main(). Reports per-stage timing.
 
@@ -79,7 +80,10 @@ def run_profile(detector, classifier, cap, frame_w, frame_h, max_frames=0,
     wall_s = time.perf_counter() - t_wall0 if t_wall0 is not None else 0.0
     measured = max(frame_count - 1, 1)  # frames excluding warmup
     metrics = {
-        "note": "CPU, non-representative — local Mac has no CUDA; FPS not indicative of GPU target. Accuracy (see classifier_eval) is valid; latency is not.",
+        "note": (
+            "CPU, non-representative — local Mac has no CUDA; FPS not indicative of "
+            "GPU target. Accuracy (see classifier_eval) is valid; latency is not."
+        ),
         "device": "cpu",
         "frames_total": frame_count,
         "frames_measured": measured,
@@ -117,14 +121,26 @@ def main():
     parser.add_argument("--detector", default="weights/yolo_fish.pt", help="Path to YOLOv8 weights")
     parser.add_argument("--conf", type=float, default=0.5, help="Classifier confidence threshold")
     parser.add_argument("--display-fps", action="store_true", help="Print FPS to terminal every 30 frames")
-    parser.add_argument("--profile", action="store_true",
-                        help="Profile detect/classify stages over the source (no GUI); writes outputs/metrics.json")
-    parser.add_argument("--max-frames", type=int, default=0,
-                        help="Profile mode: cap measured frames (0 = whole video)")
-    parser.add_argument("--reclassify-interval", type=int, default=15,
-                        help="Re-run the classifier on a tracked crop every N frames (else reuse cache)")
-    parser.add_argument("--ema-beta", type=float, default=0.6,
-                        help="EMA weight on the previous cached softmax (higher = smoother, slower to switch)")
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+        help="Profile detect/classify stages over the source (no GUI); writes outputs/metrics.json",
+    )
+    parser.add_argument(
+        "--max-frames", type=int, default=0, help="Profile mode: cap measured frames (0 = whole video)"
+    )
+    parser.add_argument(
+        "--reclassify-interval",
+        type=int,
+        default=15,
+        help="Re-run the classifier on a tracked crop every N frames (else reuse cache)",
+    )
+    parser.add_argument(
+        "--ema-beta",
+        type=float,
+        default=0.6,
+        help="EMA weight on the previous cached softmax (higher = smoother, slower to switch)",
+    )
     args = parser.parse_args()
 
     source = _parse_source(args.source)
@@ -169,8 +185,9 @@ def main():
             if not ret:
                 break
 
-            results = detector.track(frame, persist=True, tracker="bytetrack.yaml",
-                                     conf=DETECT_CONF, verbose=False)
+            results = detector.track(
+                frame, persist=True, tracker="bytetrack.yaml", conf=DETECT_CONF, verbose=False
+            )
             boxes = results[0].boxes
             out = frame if len(boxes) == 0 else frame.copy()
 
@@ -183,18 +200,21 @@ def main():
                 if (x2 - x1) < MIN_CROP_PX or (y2 - y1) < MIN_CROP_PX:
                     continue
                 tid = int(box.id[0]) if box.id is not None else None
-                items.append({"bbox": (x1, y1, x2, y2), "tid": tid,
-                              "crop": frame[y1:y2, x1:x2], "probs": None})
+                items.append(
+                    {"bbox": (x1, y1, x2, y2), "tid": tid, "crop": frame[y1:y2, x1:x2], "probs": None}
+                )
 
             # Lazy: classify only new/stale tracks (and untracked boxes), batched in one pass.
             need = [
-                i for i, it in enumerate(items)
-                if it["tid"] is None or it["tid"] not in cache
+                i
+                for i, it in enumerate(items)
+                if it["tid"] is None
+                or it["tid"] not in cache
                 or frame_count - cache[it["tid"]]["last_frame"] >= N
             ]
             if need:
                 batch_probs = classifier.predict_probs_batch([items[i]["crop"] for i in need])
-                for i, probs in zip(need, batch_probs):
+                for i, probs in zip(need, batch_probs, strict=True):
                     tid = items[i]["tid"]
                     if tid is None:
                         items[i]["probs"] = probs  # transient, not cached
@@ -214,7 +234,9 @@ def main():
                     best = result["top3"][0]
                     alts = [(p["label"], p["confidence"]) for p in result["top3"][1:]]
                     out = annotator.draw(
-                        out, best["label"], best["confidence"],
+                        out,
+                        best["label"],
+                        best["confidence"],
                         bbox=it["bbox"],
                         alt_predictions=alts or None,
                     )

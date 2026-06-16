@@ -33,18 +33,18 @@ F4K_SPECIES = {
 
 # Mediterranean — 10 species downloaded from iNaturalist
 MED_SPECIES = {
-    "Sparus_aurata":          {"common": "Gilthead seabream",   "taxon_id": 1494783},
-    "Diplodus_sargus":        {"common": "White seabream",      "taxon_id": 118669},
-    "Scorpaena_scrofa":       {"common": "Red scorpionfish",    "taxon_id": 84861},
-    "Mullus_surmuletus":      {"common": "Striped red mullet",  "taxon_id": 118619},
-    "Epinephelus_marginatus": {"common": "Dusky grouper",       "taxon_id": 100119},
-    "Coris_julis":            {"common": "Rainbow wrasse",      "taxon_id": 50968},
-    "Oblada_melanura":        {"common": "Saddled seabream",    "taxon_id": 118662},
-    "Thalassoma_pavo":        {"common": "Ornate wrasse",       "taxon_id": 50972},
-    "Sarpa_salpa":            {"common": "Salema porgy",        "taxon_id": 118663},
-    "Muraena_helena":         {"common": "Mediterranean moray", "taxon_id": 118590},
+    "Sparus_aurata": {"common": "Gilthead seabream", "taxon_id": 1494783},
+    "Diplodus_sargus": {"common": "White seabream", "taxon_id": 118669},
+    "Scorpaena_scrofa": {"common": "Red scorpionfish", "taxon_id": 84861},
+    "Mullus_surmuletus": {"common": "Striped red mullet", "taxon_id": 118619},
+    "Epinephelus_marginatus": {"common": "Dusky grouper", "taxon_id": 100119},
+    "Coris_julis": {"common": "Rainbow wrasse", "taxon_id": 50968},
+    "Oblada_melanura": {"common": "Saddled seabream", "taxon_id": 118662},
+    "Thalassoma_pavo": {"common": "Ornate wrasse", "taxon_id": 50972},
+    "Sarpa_salpa": {"common": "Salema porgy", "taxon_id": 118663},
+    "Muraena_helena": {"common": "Mediterranean moray", "taxon_id": 118590},
 }
 
 # Common display name lookup: folder_name → display string
-DISPLAY_NAMES = {k: v for k, v in F4K_SPECIES.items()}
+DISPLAY_NAMES = dict(F4K_SPECIES)
 DISPLAY_NAMES.update({k: v["common"] for k, v in MED_SPECIES.items()})

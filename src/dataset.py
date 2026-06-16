@@ -28,41 +28,48 @@ STD = (0.229, 0.224, 0.225)
 
 def build_train_transform() -> A.Compose:
     """TRAINING-TIME classifier augmentation. CLAHE etc. live here and ONLY here."""
-    return A.Compose([
-        A.SmallestMaxSize(max_size=256),
-        A.RandomCrop(height=224, width=224),
-        A.HorizontalFlip(p=0.5),
-        A.CLAHE(clip_limit=2.0, p=0.3),
-        A.RandomBrightnessContrast(p=0.5),
-        A.HueSaturationValue(p=0.4),
-        A.MotionBlur(blur_limit=7, p=0.3),
-        A.GaussNoise(p=0.3),
-        A.Normalize(mean=MEAN, std=STD),
-        ToTensorV2(),
-    ])
+    return A.Compose(
+        [
+            A.SmallestMaxSize(max_size=256),
+            A.RandomCrop(height=224, width=224),
+            A.HorizontalFlip(p=0.5),
+            A.CLAHE(clip_limit=2.0, p=0.3),
+            A.RandomBrightnessContrast(p=0.5),
+            A.HueSaturationValue(p=0.4),
+            A.MotionBlur(blur_limit=7, p=0.3),
+            A.GaussNoise(p=0.3),
+            A.Normalize(mean=MEAN, std=STD),
+            ToTensorV2(),
+        ]
+    )
 
 
 def build_val_transform() -> A.Compose:
     """Clean eval preprocessing — matches the inference path, NO augmentation/CLAHE."""
-    return A.Compose([
-        A.SmallestMaxSize(max_size=256),
-        A.CenterCrop(height=224, width=224),
-        A.Normalize(mean=MEAN, std=STD),
-        ToTensorV2(),
-    ])
+    return A.Compose(
+        [
+            A.SmallestMaxSize(max_size=256),
+            A.CenterCrop(height=224, width=224),
+            A.Normalize(mean=MEAN, std=STD),
+            ToTensorV2(),
+        ]
+    )
 
 
 def build_detector_train_transform() -> A.Compose:
     """YOLO detector fine-tuning augmentation (Kaggle). Same photometric augs, with
     bounding boxes tracked in YOLO format (cx, cy, w, h normalized)."""
-    return A.Compose([
-        A.HorizontalFlip(p=0.5),
-        A.CLAHE(clip_limit=2.0, p=0.3),
-        A.RandomBrightnessContrast(p=0.5),
-        A.HueSaturationValue(p=0.4),
-        A.MotionBlur(blur_limit=7, p=0.3),
-        A.GaussNoise(p=0.3),
-    ], bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"]))
+    return A.Compose(
+        [
+            A.HorizontalFlip(p=0.5),
+            A.CLAHE(clip_limit=2.0, p=0.3),
+            A.RandomBrightnessContrast(p=0.5),
+            A.HueSaturationValue(p=0.4),
+            A.MotionBlur(blur_limit=7, p=0.3),
+            A.GaussNoise(p=0.3),
+        ],
+        bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"]),
+    )
 
 
 class _AlbTransform:
@@ -101,8 +108,9 @@ def _make_weighted_sampler(dataset) -> WeightedRandomSampler:
     return WeightedRandomSampler(sample_weights, num_samples=len(sample_weights), replacement=True)
 
 
-def get_dataloaders(data_dir: str, val_split: float = 0.2, batch_size: int = 32,
-                    num_workers: int = 4, top_n: int = 0):
+def get_dataloaders(
+    data_dir: str, val_split: float = 0.2, batch_size: int = 32, num_workers: int = 4, top_n: int = 0
+):
     """top_n=0 uses all classes; top_n>0 keeps the N most-populated species
     (the MEDFISH101 'top-N-frequent subset' knob)."""
     data_dir = Path(data_dir)
@@ -112,8 +120,7 @@ def get_dataloaders(data_dir: str, val_split: float = 0.2, batch_size: int = 32,
         full = _restrict_to_top_n(full, top_n)
     n_val = int(len(full) * val_split)
     n_train = len(full) - n_val
-    train_set, val_set = random_split(full, [n_train, n_val],
-                                      generator=torch.Generator().manual_seed(42))
+    train_set, val_set = random_split(full, [n_train, n_val], generator=torch.Generator().manual_seed(42))
 
     # Val subset must use the clean transform — swap the underlying dataset (filtered identically).
     val_base = datasets.ImageFolder(data_dir, transform=_AlbTransform(build_val_transform()))
@@ -124,13 +131,14 @@ def get_dataloaders(data_dir: str, val_split: float = 0.2, batch_size: int = 32,
     sampler = _make_weighted_sampler(full)
     # Only apply sampler to train indices
     train_sampler = WeightedRandomSampler(
-        [sampler.weights[i] for i in train_set.indices],
-        num_samples=n_train, replacement=True
+        [sampler.weights[i] for i in train_set.indices], num_samples=n_train, replacement=True
     )
 
-    train_loader = DataLoader(train_set, batch_size=batch_size, sampler=train_sampler,
-                              num_workers=num_workers, pin_memory=True)
-    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False,
-                            num_workers=num_workers, pin_memory=True)
+    train_loader = DataLoader(
+        train_set, batch_size=batch_size, sampler=train_sampler, num_workers=num_workers, pin_memory=True
+    )
+    val_loader = DataLoader(
+        val_set, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True
+    )
 
     return train_loader, val_loader, full.classes

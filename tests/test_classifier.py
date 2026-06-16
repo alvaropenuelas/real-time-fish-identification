@@ -3,10 +3,25 @@ import unittest
 from pathlib import Path
 
 import numpy as np
+import torch
 
-WEIGHTS = Path(__file__).parent.parent / "weights" / "model.pt"
+ROOT = Path(__file__).parent.parent
+WEIGHTS = ROOT / "weights" / "model.pt"
+sys.path.insert(0, str(ROOT))
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+
+class TestBuildModel(unittest.TestCase):
+    """Weights-free — always runs in CI (model.pt is gitignored / absent on a fresh clone)."""
+
+    def test_output_shape_tracks_num_classes(self):
+        from src.model import build_model
+
+        for n in (5, 33, 101):
+            model = build_model(num_classes=n)
+            model.eval()
+            with torch.no_grad():
+                out = model(torch.randn(2, 3, 224, 224))
+            self.assertEqual(out.shape, (2, n))
 
 
 @unittest.skipIf(not WEIGHTS.exists(), f"Skipping: weights not found at {WEIGHTS}")
@@ -18,17 +33,16 @@ class TestFishClassifier(unittest.TestCase):
         frame = np.zeros((224, 224, 3), dtype=np.uint8)  # black BGR frame
         result = clf.predict(frame)
 
+        # predict() returns None (nothing above threshold) or {"top3": [{label, confidence}, ...]}
         if result is None:
-            print(f"PASS — predict returned None (confidence below threshold)")
-        else:
-            self.assertIsInstance(result, dict, "result must be a dict")
-            self.assertIn("label", result, "result must have 'label' key")
-            self.assertIn("confidence", result, "result must have 'confidence' key")
-            self.assertIsInstance(result["label"], str, "'label' must be a str")
-            self.assertIsInstance(result["confidence"], float, "'confidence' must be a float")
-            self.assertGreaterEqual(result["confidence"], 0.0)
-            self.assertLessEqual(result["confidence"], 1.0)
-            print(f"PASS — predict returned {result}")
+            return
+        self.assertIn("top3", result)
+        self.assertGreaterEqual(len(result["top3"]), 1)
+        for pred in result["top3"]:
+            self.assertIsInstance(pred["label"], str)
+            self.assertIsInstance(pred["confidence"], float)
+            self.assertGreaterEqual(pred["confidence"], 0.0)
+            self.assertLessEqual(pred["confidence"], 1.0)
 
 
 if __name__ == "__main__":

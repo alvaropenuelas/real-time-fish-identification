@@ -100,13 +100,21 @@ def _download_one(row: dict, out_dir: Path) -> str:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Download MEDFISH101 from the authors' iNaturalist link export")
+    parser = argparse.ArgumentParser(
+        description="Download MEDFISH101 from the authors' iNaturalist link export"
+    )
     parser.add_argument("--csv-url", default=DEFAULT_CSV_URL, help="Official link-export CSV URL")
-    parser.add_argument("--csv", type=Path, default=None, help="Use a local CSV copy instead of downloading it")
+    parser.add_argument(
+        "--csv", type=Path, default=None, help="Use a local CSV copy instead of downloading it"
+    )
     parser.add_argument("--out-dir", type=Path, default=Path("data/medfish101"))
-    parser.add_argument("--top-n", type=int, default=0, help="Keep only the N most-populated species (0 = all 101)")
+    parser.add_argument(
+        "--top-n", type=int, default=0, help="Keep only the N most-populated species (0 = all 101)"
+    )
     parser.add_argument("--max-per-class", type=int, default=0, help="Cap images per species (0 = no cap)")
-    parser.add_argument("--limit", type=int, default=0, help="Cap total images (0 = all; for a quick smoke run)")
+    parser.add_argument(
+        "--limit", type=int, default=0, help="Cap total images (0 = all; for a quick smoke run)"
+    )
     parser.add_argument("--workers", type=int, default=8, help="Concurrent download workers")
     args = parser.parse_args()
 
@@ -127,7 +135,10 @@ def main():
     (args.out_dir / "classes.json").write_text(json.dumps(classes, indent=2))
 
     print("=== MEDFISH101 download done ===")
-    print(f"species: {len(classes)} | downloaded: {tally['ok']} | skipped: {tally['skip']} | failed: {tally['fail']}")
+    print(
+        f"species: {len(classes)} | downloaded: {tally['ok']} | "
+        f"skipped: {tally['skip']} | failed: {tally['fail']}"
+    )
     print(f"images under: {args.out_dir}/<Class_Name>/  | classes.json written")
 
 

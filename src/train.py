@@ -15,7 +15,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 def _inference_mode(model):
     # Sets model to inference mode (disables dropout, batchnorm uses running stats)
     # nn.Module.eval() — not the Python builtin
-    getattr(model, "eval")()
+    model.eval()
 
 
 def train(model, train_loader, val_loader, num_epochs, output_dir, device, lr=1e-3, patience=5):
@@ -58,9 +58,11 @@ def train(model, train_loader, val_loader, num_epochs, output_dir, device, lr=1e
                 val_total += images.size(0)
         val_acc = val_correct / val_total
 
-        print(f"Epoch {epoch:03d}/{num_epochs}  "
-              f"train_acc={train_acc:.4f}  val_acc={val_acc:.4f}  "
-              f"({time.time()-t0:.1f}s)")
+        print(
+            f"Epoch {epoch:03d}/{num_epochs}  "
+            f"train_acc={train_acc:.4f}  val_acc={val_acc:.4f}  "
+            f"({time.time() - t0:.1f}s)"
+        )
 
         history.append({"epoch": epoch, "train_acc": train_acc, "val_acc": val_acc})
 

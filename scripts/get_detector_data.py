@@ -105,8 +105,7 @@ def fetch_manifests(url: str, out: Path, dry: bool, download_images: bool) -> No
         dest = out / "manifests" / Path(m).name
         _download(m, dest)
         if download_images:
-            urls = [ln.strip() for ln in dest.read_text().splitlines()
-                    if ln.strip().startswith("http")]
+            urls = [ln.strip() for ln in dest.read_text().splitlines() if ln.strip().startswith("http")]
             print(f"    {len(urls)} image URLs in {dest.name}")
             for u in urls:
                 _download(u, out / "images" / Path(u).name)
@@ -117,8 +116,11 @@ def main():
     parser.add_argument("--source", choices=[*SOURCES, "all"], default="all")
     parser.add_argument("--out-dir", type=Path, default=Path("data/detector"))
     parser.add_argument("--dry-run", action="store_true", help="List what would be downloaded, fetch nothing")
-    parser.add_argument("--download-images", action="store_true",
-                        help="OzFish: also fetch every image URL listed in each manifest (large)")
+    parser.add_argument(
+        "--download-images",
+        action="store_true",
+        help="OzFish: also fetch every image URL listed in each manifest (large)",
+    )
     args = parser.parse_args()
 
     targets = list(SOURCES) if args.source == "all" else [args.source]
