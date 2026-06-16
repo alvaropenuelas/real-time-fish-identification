@@ -12,6 +12,7 @@ Docker). On this macOS x86_64 dev box they would source-build, so albumentations
 imported by the always-on inference path — only by training (Kaggle) and eval tooling.
 """
 
+from collections import Counter
 from pathlib import Path
 
 import albumentations as A
@@ -74,6 +75,22 @@ class _AlbTransform:
         return self.compose(image=np.array(pil_img))["image"]
 
 
+def _restrict_to_top_n(ds: datasets.ImageFolder, top_n: int) -> datasets.ImageFolder:
+    """Keep only the top_n most-populated classes, relabelled to a contiguous 0..top_n-1.
+    Deterministic (frequency then name) so train/val ImageFolders filter identically."""
+    counts = Counter(label for _, label in ds.samples)
+    keep_ids = {cls for cls, _ in counts.most_common(top_n)}
+    keep_names = sorted(ds.classes[c] for c in keep_ids)
+    new_idx = {name: i for i, name in enumerate(keep_names)}
+    old_to_new = {ds.class_to_idx[name]: new_idx[name] for name in keep_names}
+    samples = [(p, old_to_new[label]) for p, label in ds.samples if label in keep_ids]
+    ds.samples = ds.imgs = samples
+    ds.targets = [label for _, label in samples]
+    ds.classes = keep_names
+    ds.class_to_idx = new_idx
+    return ds
+
+
 def _make_weighted_sampler(dataset) -> WeightedRandomSampler:
     """Upsample minority classes so each class is seen equally per epoch."""
     class_counts = torch.zeros(len(dataset.classes))
@@ -84,17 +101,25 @@ def _make_weighted_sampler(dataset) -> WeightedRandomSampler:
     return WeightedRandomSampler(sample_weights, num_samples=len(sample_weights), replacement=True)
 
 
-def get_dataloaders(data_dir: str, val_split: float = 0.2, batch_size: int = 32, num_workers: int = 4):
+def get_dataloaders(data_dir: str, val_split: float = 0.2, batch_size: int = 32,
+                    num_workers: int = 4, top_n: int = 0):
+    """top_n=0 uses all classes; top_n>0 keeps the N most-populated species
+    (the MEDFISH101 'top-N-frequent subset' knob)."""
     data_dir = Path(data_dir)
 
     full = datasets.ImageFolder(data_dir, transform=_AlbTransform(build_train_transform()))
+    if top_n and 0 < top_n < len(full.classes):
+        full = _restrict_to_top_n(full, top_n)
     n_val = int(len(full) * val_split)
     n_train = len(full) - n_val
     train_set, val_set = random_split(full, [n_train, n_val],
                                       generator=torch.Generator().manual_seed(42))
 
-    # Val subset must use the clean transform — swap the underlying dataset.
-    val_set.dataset = datasets.ImageFolder(data_dir, transform=_AlbTransform(build_val_transform()))
+    # Val subset must use the clean transform — swap the underlying dataset (filtered identically).
+    val_base = datasets.ImageFolder(data_dir, transform=_AlbTransform(build_val_transform()))
+    if top_n and 0 < top_n < len(val_base.classes):
+        val_base = _restrict_to_top_n(val_base, top_n)
+    val_set.dataset = val_base
 
     sampler = _make_weighted_sampler(full)
     # Only apply sampler to train indices

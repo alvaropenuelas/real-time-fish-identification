@@ -12,8 +12,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.model import build_model
 from src.species_map import DISPLAY_NAMES
 
-# VERIFY: confirm num_classes=33 matches model.pt
-NUM_CLASSES = 33
+# Class count is derived from the checkpoint at load time (final Linear out-features),
+# never hardcoded — so the same code serves the current model and the MEDFISH101 model
+# after retraining, with no edit here.
 HARD_CONF_FLOOR = 0.3
 
 _TRANSFORMS = transforms.Compose([
@@ -31,7 +32,9 @@ class FishClassifier:
 
         # ASSUMPTION: weights_path is a state_dict saved via torch.save(model.state_dict(), path)
         state_dict = torch.load(weights_path, map_location=self.device, weights_only=True)
-        self.model = build_model(num_classes=NUM_CLASSES)
+        # Derive the class count from the checkpoint's final Linear layer — never hardcoded.
+        self.num_classes = state_dict["classifier.1.weight"].shape[0]
+        self.model = build_model(num_classes=self.num_classes)
         self.model.load_state_dict(state_dict)
         self.model.to(self.device)
         getattr(self.model, "eval")()  # nn.Module.eval(), not Python built-in
@@ -49,6 +52,13 @@ class FishClassifier:
                 f"classes.json not found in {weights_dir} or outputs/"
             )
 
+        # Fail loud if the label list and the checkpoint disagree on the class count.
+        if len(self.class_names) != self.num_classes:
+            raise ValueError(
+                f"classes.json desynced from checkpoint: {len(self.class_names)} labels "
+                f"vs {self.num_classes} model outputs ({weights_path})"
+            )
+
     def _preprocess(self, frame: np.ndarray) -> torch.Tensor:
         # Input: BGR frame (H×W×3, uint8) from OpenCV → normalized CHW tensor
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -58,7 +68,7 @@ class FishClassifier:
     def predict_probs_batch(self, frames: list[np.ndarray]) -> np.ndarray:
         """Softmax probabilities [N, NUM_CLASSES] for N BGR crops in ONE forward pass."""
         if not frames:
-            return np.empty((0, NUM_CLASSES), dtype=np.float32)
+            return np.empty((0, self.num_classes), dtype=np.float32)
         batch = torch.stack([self._preprocess(f) for f in frames]).to(self.device)
         with torch.no_grad():
             probs = torch.softmax(self.model(batch), dim=1)
