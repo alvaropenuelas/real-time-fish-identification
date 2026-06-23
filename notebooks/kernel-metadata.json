@@ -1,0 +1,17 @@
+{
+  "id": "lvarop99/fishdetector-v2",
+  "title": "fishdetector-v2",
+  "code_file": "train_yolo_kaggle.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "dataset_sources": [
+    "lvarop99/freshwater-fish-detector"
+  ],
+  "kernel_sources": [],
+  "competition_sources": [],
+  "model_sources": []
+}
