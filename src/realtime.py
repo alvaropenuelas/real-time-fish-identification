@@ -122,6 +122,11 @@ def main():
     parser.add_argument("--conf", type=float, default=0.5, help="Classifier confidence threshold")
     parser.add_argument("--display-fps", action="store_true", help="Print FPS to terminal every 30 frames")
     parser.add_argument(
+        "--save",
+        default=None,
+        help="Write annotated frames to this mp4 instead of showing a window (headless)",
+    )
+    parser.add_argument(
         "--profile",
         action="store_true",
         help="Profile detect/classify stages over the source (no GUI); writes outputs/metrics.json",
@@ -170,6 +175,19 @@ def main():
 
     frame_count = 0
     t0 = time.time()
+
+    # Headless save: write annotated frames to mp4, no display window.
+    writer = None
+    if args.save:
+        src_fps = cap.get(cv2.CAP_PROP_FPS)
+        out_fps = src_fps if src_fps and src_fps > 0 else 25.0
+        Path(args.save).parent.mkdir(parents=True, exist_ok=True)
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        writer = cv2.VideoWriter(args.save, fourcc, out_fps, (frame_w, frame_h))
+        if not writer.isOpened():
+            print(f"Error: cannot open VideoWriter for: {args.save}", file=sys.stderr)
+            cap.release()
+            sys.exit(1)
 
     # Per-track state: track_id -> {"ema": softmax vector, "last_frame": frame last classified}.
     # A crop is classified only when its track is new or every --reclassify-interval frames;
@@ -247,17 +265,25 @@ def main():
                 for tid in stale:
                     del cache[tid]
 
-            cv2.imshow("Fish Species — Real-Time ID", out)
+            if writer is not None:
+                writer.write(out)
+            else:
+                cv2.imshow("Fish Species — Real-Time ID", out)
 
             frame_count += 1
             if args.display_fps and frame_count % 30 == 0:
                 elapsed = time.time() - t0
                 print(f"FPS: {frame_count / elapsed:.1f}")
 
-            if cv2.waitKey(1) & 0xFF == ord("q"):
+            if writer is None and cv2.waitKey(1) & 0xFF == ord("q"):
                 break
     finally:
         cap.release()
+        if writer is not None:
+            writer.release()
+            elapsed = time.time() - t0
+            fps = frame_count / elapsed if elapsed > 0 else 0.0
+            print(f"saved {frame_count} annotated frames to {args.save} | {fps:.2f} FPS ({elapsed:.1f}s)")
         cv2.destroyAllWindows()
 
 

@@ -18,7 +18,7 @@ networkx==3.6.1
 numpy==1.26.4
 nvidia-ml-py==13.610.43
 opencv-python==4.9.0.80
-packaging @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_packaging_1777103621/work
+packaging==26.2
 pillow==12.2.0
 polars==1.41.2
 polars-runtime-32==1.41.2
