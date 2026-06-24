@@ -81,6 +81,92 @@ Both models were trained on Kaggle free GPU (NVIDIA T4) using notebooks in `note
 - **Classifier** (`train_kaggle.ipynb`): EfficientNet-B0 fine-tuned on Fish4Knowledge + iNaturalist Mediterranean species (33 classes, ~4,700 images after subsampling). Data uploaded to Kaggle as dataset `lvarop99/fish-training-data`.
 - **Detector** (`train_yolo_kaggle.ipynb`): YOLOv8n fine-tuned on a single-class fish bounding box dataset from Roboflow Universe (50 epochs, imgsz=640). Data uploaded as `lvarop99/fish-dataset-v1`.
 
+## Detector evaluation: avoiding a data leak
+
+### Motivation
+
+The original detector was trained on a freshwater fish dataset and degraded on marine
+footage — a domain mismatch between training and deployment conditions. It was therefore
+retrained on **DeepFish** (marine underwater video, from the YOLO-Fish benchmark), a
+single-class fish detection dataset.
+
+### The false result
+
+A first retraining attempt used a **frame-level split**: individual annotated frames were
+assigned to train/val/test independently. It scored **mAP ≈ 0.97**. That was a red flag,
+not a success. DeepFish frames come from a small number of video clips, and consecutive
+frames within a clip are near-duplicates. A frame-level split scatters these
+near-duplicate neighbours across train and test, so the model was scored partly on frames
+it had effectively already seen during training. The 0.97 measured memorisation, not
+generalisation.
+
+### Diagnosis
+
+Inspecting train versus test frames confirmed the leak directly: the test set contained
+images that were near-identical to training images from the same clip.
+
+### The fix — a clip-disjoint split
+
+The split was rebuilt so that **every video clip lives in exactly one of train/val/test**.
+Frames are grouped by clip id (the filename with the trailing `_f######` frame index
+stripped), and whole clips — not individual frames — are partitioned (deterministic, seed
+42). The test set then contains only clips never seen in training, so it measures
+generalisation to unseen footage rather than recall of memorised neighbours.
+
+<!-- TODO: verify — the per-split counts below are NOT stored anywhere in the repo. They
+     are computed at runtime by notebooks/train_yolo_kaggle.ipynb (cell A2) from the
+     DeepFish export downloaded on Kaggle, which is not committed. The split *logic* is
+     verified and corresponds to commit f5b1cbf (later commits touched only Kaggle GPU
+     metadata, not the split/box/label code). The split is deterministic (seed 42), so
+     these numbers should be stable, but they have NOT been reproduced against a completed
+     run's printed output — the only API run was cancelled before cell A2 executed.
+     Confirm these against the run log before treating them as final. -->
+
+| Split | Clips | Images | Boxes |
+|---|---:|---:|---:|
+| train | 31 | 2986 | 11258 |
+| val   | 6  | 392  | 695   |
+| test  | 9  | 1127 | 3510  |
+
+Every label file in every split contains at least one box, and no clip appears in more
+than one split.
+
+### Guardrails
+
+The split routine carries permanent runtime assertions, so the two failure modes cannot
+silently return:
+
+- **No empty labels** — every label file in each split must contain ≥1 box line; the run
+  aborts otherwise. (An earlier bug had produced empty train/val labels.)
+- **Clip-disjoint** — train, val, and test clip sets must be pairwise disjoint; any clip
+  overlap aborts the run.
+
+These run every time the dataset is assembled, before any training begins.
+
+### Honest consequence
+
+The clip-disjoint mAP is **lower** than the leaky 0.97, and that lower number is the
+honest one — it is what the detector achieves on genuinely unseen clips. Reported on the
+same held-out marine test set, old versus new:
+
+| Detector | Training domain | mAP (clip-disjoint marine test) |
+|---|---|---|
+| Freshwater detector | out-of-domain | {{mAP_before}} |
+| DeepFish detector   | in-domain     | {{mAP_after}} |
+
+This is an **in-domain (marine-trained) versus out-of-domain (freshwater-trained)**
+comparison on the same test set. It demonstrates that domain match matters for this task;
+it is **not** a claim of state-of-the-art detection performance.
+
+### Benchmark caveat
+
+The official YOLO-Fish test split was deliberately **not** used. Its frames share clips
+with the training data, so adopting it would reintroduce exactly the clip-overlap leak
+described above. As a consequence, this result is intentionally **not comparable** to the
+published DeepFish AP (≈0.76, measured on that official split). This is a deliberate
+honesty tradeoff: a lower number that actually measures generalisation is worth more than
+a higher number inflated by leakage.
+
 ## Limitations
 
 - Classifier trained on ~4,700 images — limited generalisation to diverse video conditions
