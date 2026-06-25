@@ -1,15 +1,18 @@
 import argparse
+import csv
 import json
 import sys
 import time
 from pathlib import Path
 
 import cv2
+import numpy as np
 from ultralytics import YOLO
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.annotator import Annotator
 from src.classifier import FishClassifier
+from src.species_map import DISPLAY_NAMES
 
 # COCO class 16 = fish — replace with fish-specific weights for better recall
 DETECT_CONF = 0.4
@@ -127,6 +130,11 @@ def main():
         help="Write annotated frames to this mp4 instead of showing a window (headless)",
     )
     parser.add_argument(
+        "--predict-log",
+        default=None,
+        help="Write one CSV row per classified detection (raw top1/top2, emitted flag) to this path",
+    )
+    parser.add_argument(
         "--profile",
         action="store_true",
         help="Profile detect/classify stages over the source (no GUI); writes outputs/metrics.json",
@@ -189,6 +197,26 @@ def main():
             cap.release()
             sys.exit(1)
 
+    # Optional prediction log: one row per classified detection (raw top1/top2 + emitted flag).
+    # Read-only on the pipeline — it reports the same softmax vector that drives the drawn label.
+    pred_log_file = None
+    pred_log = None
+    if args.predict_log:
+        Path(args.predict_log).parent.mkdir(parents=True, exist_ok=True)
+        pred_log_file = open(args.predict_log, "w", newline="")
+        pred_log = csv.writer(pred_log_file)
+        pred_log.writerow(
+            [
+                "frame_idx", "track_id", "det_conf",
+                "classifier_top1_name", "classifier_top1_conf",
+                "classifier_top2_name", "classifier_top2_conf", "emitted",
+            ]
+        )
+
+    def _name(idx):
+        folder = classifier.class_names[idx]
+        return DISPLAY_NAMES.get(folder, folder.replace("_", " "))
+
     # Per-track state: track_id -> {"ema": softmax vector, "last_frame": frame last classified}.
     # A crop is classified only when its track is new or every --reclassify-interval frames;
     # otherwise we reuse the EMA-smoothed cached vector. This cuts classifier calls and the
@@ -218,8 +246,15 @@ def main():
                 if (x2 - x1) < MIN_CROP_PX or (y2 - y1) < MIN_CROP_PX:
                     continue
                 tid = int(box.id[0]) if box.id is not None else None
+                det_conf = float(box.conf[0]) if box.conf is not None else None
                 items.append(
-                    {"bbox": (x1, y1, x2, y2), "tid": tid, "crop": frame[y1:y2, x1:x2], "probs": None}
+                    {
+                        "bbox": (x1, y1, x2, y2),
+                        "tid": tid,
+                        "crop": frame[y1:y2, x1:x2],
+                        "probs": None,
+                        "det_conf": det_conf,
+                    }
                 )
 
             # Lazy: classify only new/stale tracks (and untracked boxes), batched in one pass.
@@ -247,6 +282,24 @@ def main():
                 probs = it["probs"] if it["tid"] is None else cache[it["tid"]]["ema"]
                 if probs is None:
                     continue
+
+                # Log raw top1/top2 from the SAME vector that drives the label, including
+                # detections below the floor (emitted=false). Does not affect drawing.
+                if pred_log is not None:
+                    order = np.argsort(probs)[::-1]
+                    i1, i2 = int(order[0]), int(order[1])
+                    c1, c2 = float(probs[i1]), float(probs[i2])
+                    pred_log.writerow(
+                        [
+                            frame_count,
+                            it["tid"],
+                            round(it["det_conf"], 4) if it["det_conf"] is not None else "",
+                            _name(i1), round(c1, 4),
+                            _name(i2), round(c2, 4),
+                            str(c1 >= classifier.threshold).lower(),
+                        ]
+                    )
+
                 result = classifier.decode(probs)
                 if result:
                     best = result["top3"][0]
@@ -284,6 +337,9 @@ def main():
             elapsed = time.time() - t0
             fps = frame_count / elapsed if elapsed > 0 else 0.0
             print(f"saved {frame_count} annotated frames to {args.save} | {fps:.2f} FPS ({elapsed:.1f}s)")
+        if pred_log_file is not None:
+            pred_log_file.close()
+            print(f"prediction log written to {args.predict_log}")
         cv2.destroyAllWindows()
 
 
