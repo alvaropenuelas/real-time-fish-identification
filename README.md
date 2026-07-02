@@ -287,8 +287,7 @@ model swap. This is an honest diagnostic portfolio piece, not a finished product
 
 ## Author
 
-Alvaro Peñuelas Suria — MSc Marine and Lacustrine Science and Management (Ghent/VUB/Antwerp),
-BSc Biology (Universidad de Navarra). GitHub: [alvaropenuelas](https://github.com/alvaropenuelas)
+Alvaro Peñuelas Sánchez - GitHub: [alvaropenuelas](https://github.com/alvaropenuelas)
 
 This project was developed independently as part of a portfolio demonstrating real-time computer
 vision applied to marine biology. AI tools (Claude Code) were used as a coding assistant; all
